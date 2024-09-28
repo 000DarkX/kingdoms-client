@@ -23,9 +23,13 @@
                 <input type="text" class="form-control" id="floatingInput" placeholder="Host" v-model="host">
                 <label for="floatingInput">Host</label>
             </div>
-            <div class="form-floating">
+            <div class="form-floating mb-3">
                 <input type="number" class="form-control" id="floatingPassword" placeholder="Port" v-model="port">
                 <label for="floatingPassword">Port</label>
+            </div>
+            <div class="form-floating mb-3">
+                <input type="text" class="form-control" id="floatingInput" placeholder="Username" v-model="tmpusername">
+                <label for="floatingInput">Username</label>
             </div>
             <hr>
             <button @click="join" type="button" data-mdb-button-init data-mdb-ripple-init class="btn btn-primary btn-block mb-4">Join</button>
@@ -35,7 +39,7 @@
                 <div class="window-header">
                     Map
                 </div>
-                <canvas width="432" height="432"></canvas>
+                <canvas ref="mapCanvas" width="432" height="432"></canvas>
             </div>
 
             <div ref="cmdElement" class="window">
@@ -55,13 +59,12 @@
     </div> 
     <input type="file" id="upload" hidden>
     <script type="module">
-        const version = "0.0.2";
         const {createApp, ref} = Vue;
-
         const uploadElement = document.getElementById("upload");
 
-        document.title = `Kingdoms v${version}`;
-
+        import * as GLOB from "./js/glob.mjs";
+        import {drawTile} from "./js/mapHelper.mjs";
+        
         createApp({
             watch: {
                 mapElement(n, o) {
@@ -78,15 +81,81 @@
             setup() {
                 const host = ref("localhost");
                 const port = ref(4343);
+                const tmpusername = ref("guest");
                 const socket = ref(undefined);
                 const mapElement = ref(undefined);
                 const cmdElement = ref(undefined);
                 const cmdInput   = ref(undefined);
+                const mapCanvas  = ref(undefined);
+                
+                function drawLayers(view) {
+                    const canvas = mapCanvas.value;
+                    const ctx = canvas.getContext("2d");
 
-                function sendCommand(e) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    const begX = -4;
+                    const begY = -4;
+
+                    const endX = 5;
+                    const endY = 5;
+
+                    const tileWidth = 9;
+                    const tileHeight = 9;
+
+                    const firstgid = {
+                        1: {type: "terrain", count: 960},
+                        961: { type: "walls", count: 368},
+                        1329: { type: "decor", count: 1248},
+                    }
+
+                    ctx.fillStyle = "black";
+                    ctx.fillRect(0, 0, cellWidth*9, cellHeight*9);
+
+                    function drawLayer(id, xx, yy) {
+                        for (const key in firstgid) {
+                            const type = firstgid[key];
+                            if (id <= key + type.count) {
+                                switch (type.type) {
+                                    case "terrain": globalThis.terrainImages.drawByID(ctx, id - key, xx*cellWidth, yy*cellHeight, cellWidth, cellHeight); break;
+                                    case "walls": globalThis.wallImages.drawByID(ctx, id - key, xx*cellWidth, yy*cellHeight, cellWidth, cellHeight); break;
+                                    case "decor": globalThis.decorImages.drawByID(ctx, id - key, xx*cellWidth, yy*cellHeight, cellWidth, cellHeight); break;
+                                }
+                            }
+                        }
+                    }
+
+                    let xx = 0;
+                    let yy = 0;
+                    for (let id = 0; id< view.length; ++id) {
+                        const layerGround = view[id].layerGround;
+                        const layerfoliage = view[id].layerFoliage;
+                        const layerWall = view[id].layerWall;
+
+                        if (layerGround != 0 && layerGround != undefined) {
+                            drawLayer(layerGround, xx, yy);
+                        }
+
+                        if (layerfoliage != 0 && layerfoliage != undefined) {
+                            drawLayer(layerfoliage, xx, yy);
+                        }
+
+                        if (layerWall != 0 && layerWall != undefined) {
+                            drawLayer(layerWall, xx, yy);
+                        }
+
+                        ++xx;
+                        if (xx >= 9) {
+                            ++yy;
+                            xx = 0;
+                        }
+                    }
+                }
+
+                function sendActualCommand(value) {
                     const cmd = {
                         type: "command",
-                        value: cmdInput.value
+                        value: value
                     };
 
                     if (cmd.value.startsWith("/")) {
@@ -102,6 +171,7 @@
                                             const content = e.target.result;
                                             cmd.data = content;
                                             socket.value.send(JSON.stringify(cmd));
+                                            uploadElement.value = "";
                                         };
                                         reader.readAsText(file);
                                     }
@@ -114,13 +184,17 @@
                     }
                 }
 
+                function sendCommand(e) {
+                    sendActualCommand(cmdInput.value);
+                }
+
                 function join(e) {
                     socket.value = new WebSocket(`ws://${host.value}:${port.value}`);
 
                     // Connection opened
                     socket.value.addEventListener('open', (event) => {
                         console.log('Connection opened:', event);
-                        socket.value.send('Hello Server!');
+                        sendActualCommand(`login ${tmpusername.value}`);
                     });
 
                     // Listen for messages
@@ -131,6 +205,12 @@
                             switch (data.type) {
                                 case "popup-message":
                                     msgPopup(data.msg);
+                                break;
+                                case "map":
+                                    mapElement.value.querySelector(`[class="window-header"]`)
+                                    .innerHTML = data.title;
+                                    globalThis.drawTile = drawTile.bind(this, mapCanvas.value.getContext("2d"));
+                                    drawLayers(data.view);
                                 break;
                             }
                         } catch (e) {
@@ -153,7 +233,7 @@
                     });
                 }
 
-                return {host, port, socket, mapElement, cmdElement, cmdInput, join, sendCommand};
+                return {host, port, tmpusername, socket, mapElement, mapCanvas, cmdElement, cmdInput, join, sendCommand};
             }
         }).mount("main");
     </script>

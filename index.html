@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kingdoms</title>
+    <link rel="stylesheet" href="./css/main.css"></link>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <div v-if="socket == undefined" class="grid">
+            <label>Host: <input name="host" v-model="host"></label>
+            <label>Port: <input name="port" v-model="port"></label>
+            <button @click="join">Join</button>
+        </div>
+        <div v-else>
+            <canvas width="432" height="432"></canvas>
+        </div>
+    </main>    
+    <script type="module">
+        const {createApp, ref} = Vue;
+
+        createApp({
+            setup() {
+                const host = ref("localhost");
+                const port = ref(4343);
+                const socket = ref(undefined);
+
+                function join(e) {
+                    socket.value = new WebSocket(`ws://${host.value}:${port.value}`);
+
+                    // Connection opened
+                    socket.addEventListener('open', (event) => {
+                        console.log('Connection opened:', event);
+                        socket.send('Hello Server!');
+                    });
+
+                    // Listen for messages
+                    socket.addEventListener('message', (event) => {
+                        console.log('Message from server:', event.data);
+                    });
+
+                    // Listen for errors
+                    socket.addEventListener('error', (event) => {
+                        console.error('WebSocket error:', event);
+                    });
+
+                    // Connection closed
+                    socket.addEventListener('close', (event) => {
+                        console.log('Connection closed:', event);
+                    });
+                }
+
+                return {host, port, socket, join};
+            }
+        }).mount("main");
+    </script>
+</body>
+</html>

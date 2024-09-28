@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kingdoms</title>
     <link rel="stylesheet" href="./css/main.css"></link>
+    <script src="./js/popup.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
     <style>
         canvas {
@@ -22,7 +23,13 @@
         <div v-else>
             <canvas width="432" height="432"></canvas>
         </div>
-    </main>    
+    </main>   
+    <div id="popup" class="popup">
+        <div class="popup-content">
+          <span class="close" onclick="closePopup()">&times;</span>
+          <p id="popup-msg">This is a simple popup message!</p>
+          </div>
+    </div> 
     <script type="module">
         const {createApp, ref} = Vue;
 
@@ -36,24 +43,37 @@
                     socket.value = new WebSocket(`ws://${host.value}:${port.value}`);
 
                     // Connection opened
-                    socket.addEventListener('open', (event) => {
+                    socket.value.addEventListener('open', (event) => {
                         console.log('Connection opened:', event);
-                        socket.send('Hello Server!');
+                        socket.value.send('Hello Server!');
                     });
 
                     // Listen for messages
-                    socket.addEventListener('message', (event) => {
+                    socket.value.addEventListener('message', (event) => {
                         console.log('Message from server:', event.data);
+                        try {
+                            const data = JSON.parse(event.data);
+                            switch (data.type) {
+                                case "popup-message":
+                                    msgPopup(data.msg);
+                                break;
+                            }
+                        } catch (e) {
+                            console.error(e);
+                        }
+                        
                     });
 
                     // Listen for errors
-                    socket.addEventListener('error', (event) => {
+                    socket.value.addEventListener('error', (event) => {
                         console.error('WebSocket error:', event);
+                        socket.value = undefined;
                     });
 
                     // Connection closed
-                    socket.addEventListener('close', (event) => {
+                    socket.value.addEventListener('close', (event) => {
                         console.log('Connection closed:', event);
+                        socket.value = undefined;
                     });
                 }
 
